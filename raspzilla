@@ -1,0 +1,150 @@
+#!/bin/bash
+#
+#This is a very simple wrapper to pv and dd
+#written to work in the same way clonezilla does,
+#in order to ease (me) disk images management.
+#
+#I wrote it for my specific need of 
+#managing SDcard images for the Raspberry Pi, 
+#since my organization required several custom
+#builds.
+#
+#Probably there are better ways and tools to do this
+#But here is my try.
+#
+#Configuration:
+#
+#The folder where images are stored to/cloned from
+img_dir="/media/disk-2/rasp"
+#A default/proposed filename will be built for image creation
+#using this value and current date.
+propsed_filename="raspbian_"
+
+reqs ()
+{
+if [[ "$(id -u)" != "0" ]]; then
+   echo "This tool requires root privilegas" 1>&2
+   exit 255
+fi
+read dialog <<< "$(command -v whiptail dialog 2> /dev/null)"
+[[ "$dialog" ]] || {
+  echo 'This tool requires either whiptail or dialog' 1>&2
+  exit 255
+    }
+for c in dd pv ;do
+    command -v $c >/dev/null 2>&1 || { echo "$0 requires $c but it's not installed.  Aborting." >&2; exit 1; }
+done
+}
+
+img2sd ()
+{
+
+IMGLIST=`images`
+IMG=$($dialog --title "Choose an image to clone" --radiolist "Make sure there's an SD card ready to be erased and overwritten with this image" 25 78 10 $IMGLIST 3>&1 1>&2 2>&3)
+status=$?
+if [ $status = 0 ]; then
+    DEVLIST=`removables`
+    DEV=$($dialog --title "Choose a DESTINATION DEVICE" --radiolist "WARNING! All contents will be overwritten" 20 78 4 $DEVLIST 3>&1 1>&2 2>&3)
+    status=$?
+    run=0
+    if [ $status = 0 ]; then
+	if ($dialog --title "Last warning! SD Card will be overwritten" --yesno "You are about to flash the image file:\n\n $IMG \n\n Into $DEV \n\n Please make sure it's Ok to proceed." 20 78) then
+	    (pv -n $IMG | dd of=/dev/$DEV bs=2M conv=notrunc,noerror) 2>&1 | $dialog --gauge "Running dd command (cloning image), please wait..." 10 70 0
+	    $dialog --title "Image cloning finished" --msgbox "Image-to-disk operation complete" 20 78
+	else
+	    echo "Cancelled."
+	fi
+    fi
+fi
+}
+
+sd2img ()
+{
+DEVLIST=`removables`
+IMGLIST=`images|awk '{print $1}'`
+PREF=`date "+%d_%m_%y"`
+if [ "$DEVLIST" != "" ];then
+    DEV=$($dialog --title "Choose an ORIGIN DEVICE" --radiolist "All SDcard contents will be copied to an image file" 20 78 4 $DEVLIST 3>&1 1>&2 2>&3)
+    status=$?
+    if [ $status = 0 ]; then
+	IMG=$($dialog --title "Provide an Image filename" --inputbox "Existing filenames:\n\n$IMGLIST\n\nWrite the new filename:" 25 78 $propsed_filename$PREF 3>&1 1>&2 2>&3)
+	promptstatus=$?
+	run=0
+	if [ $promptstatus = 0 ]; then
+	    if [ -f $IMG  ];then
+		if ($dialog --title "File already exists." --yesno "You are about to overwrite an existing image file:\n\nAre you sure?." 20 78) then
+		    run=1
+		fi
+	    fi
+	    if ($dialog --title "Please confirm image file creation" --yesno "You are about to create an image file:\n\n $IMG \n\nWith data from $DEV\n\nThis is a long time-disk space consuming process. Please make sure it's Ok to proceed." 20 78) then
+		run=1
+	    else
+		run=0
+	    fi
+	    if [ $run = 1 ];then
+		(pv -n /dev/$DEV | dd of=$IMG bs=2M conv=notrunc,noerror) 2>&1 | $dialog --gauge "Running dd command (creating image), please wait..." 10 70 0
+		$dialog --title "Image creation finished" --msgbox "Disk-to-image operation complete" 20 78
+	    fi
+	fi
+    fi
+fi
+}
+
+images ()
+{
+for image in $(find . -type f -printf '%f\n');do 
+    size=$(find . -type f -name $image -printf '%s\n'|human_print)
+    echo $image $size OFF;
+done
+}
+
+removables ()
+{
+for disk in /sys/block/* ;do
+    [ -f "$disk/removable" ]    && [ $(<"$disk/removable") -gt 0 ]   &&
+    [ -f "$disk/size" ]         && [ $(<"$disk/size") -gt 0 ]        &&
+    [ -f "$disk/trace/enable" ] && [ -z "$(<"$disk/trace/enable")" ] &&
+    size=$(cat $disk/size|human_print)&&
+    out="${disk##*/}@$size|$(<"$disk/device/model")" &&
+    line=$(echo $out|sed -e 's/ /_/g'|sed -e '0,/@/s// /') &&
+    echo $line OFF
+  done
+}
+
+human_print(){
+while read B dummy; do
+  [ $B -lt 1024 ] && echo ${B}bytes && break
+  KB=$(((B+512)/1024))
+  [ $KB -lt 1024 ] && echo ${KB}Kb && break
+  MB=$(((KB+512)/1024))
+  [ $MB -lt 1024 ] && echo ${MB}Mb && break
+  GB=$(((MB+512)/1024))
+  [ $GB -lt 1024 ] && echo ${GB}Gb && break
+  echo $(((GB+512)/1024))Tb
+done
+}
+
+main ()
+{
+cd $img_dir
+reqs
+while [ 1 ];do
+MAIN=$($dialog --title "Raspzilla: Select mode" --menu "* Raspzilla is free (GPL) software, and comes with ABSOLUTELY NO WARRANTY*\nThis software will overwrite the data on your removable storage when restoring! It is recommended to backup important files before restoring!***\nSelect mode:\n\n" 35 80 10 \
+"Save SD to Image" "Create an image from the SD card contents." \
+"Restore Image to SD" "Create a new bootable Rpi SD Card from an existing image." \
+"Manage Images" "List/Delete images present on configured disk space." \
+"Quit" "Exit program, return to command line prompt." 3>&2 2>&1 1>&3)
+case $MAIN in
+    "Quit") exit 0
+    ;;
+    "Restore Image to SD") img2sd
+    ;;
+    "Save SD to Image") sd2img
+    ;;
+#   "Manage Images") img4del
+#   ;;
+esac
+done
+}
+
+main
