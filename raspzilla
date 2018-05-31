@@ -38,7 +38,6 @@ done
 
 img2sd ()
 {
-
 IMGLIST=`images`
 IMG=$($dialog --title "Choose an image to clone" --radiolist "Make sure there's an SD card ready to be erased and overwritten with this image" 25 78 10 $IMGLIST 3>&1 1>&2 2>&3)
 status=$?
@@ -92,8 +91,8 @@ fi
 
 images ()
 {
-for image in $(find . -type f -printf '%f\n');do 
-    size=$(find . -type f -name $image -printf '%s\n'|human_print)
+for image in $(find $img_dir -type f -printf '%f\n');do 
+    size=$(find $img_dir -type f -name $image -printf '%s\n'|human_print)
     echo $image $size OFF;
 done
 }
@@ -111,7 +110,8 @@ for disk in /sys/block/* ;do
   done
 }
 
-human_print(){
+human_print()
+{
 while read B dummy; do
   [ $B -lt 1024 ] && echo ${B}bytes && break
   KB=$(((B+512)/1024))

@@ -9,7 +9,7 @@ Requirements
 - **bash** ( mine is >=4, should work with any modern version )
 - **pv** (Shell pipeline element to meter data passing through)
 - **dd** (convert and copy a file, part of GNU **coreutils**)
-- **dialog** or ** whiptail** (user friendly dialogs for shell scripting)
+- **dialog** or **whiptail** (user friendly dialogs for shell scripting)
 
 
 Downloading Raspzilla
@@ -29,9 +29,9 @@ Configuring Raspzilla
 This script needs you to manually edit where the image files are.
 
 DISCLAIMER
-==========
+----------
 
 I've put this together in a couple of minutes, in order to ease my needs of 
 managing, imaging and cloning SD Cards for many Raspberry-based custom projects 
 I work with for my organization. My workstation runs Debian 9  and images are 
-Raspbian based. If your software is different, your mileage my vary.
+Raspbian based. If your software is different, your mileage may vary.
